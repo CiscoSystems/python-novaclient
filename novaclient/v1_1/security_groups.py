@@ -19,6 +19,8 @@ Security group interface (1.1 extension).
 
 import urllib
 
+import six
+
 from novaclient import base
 
 
@@ -28,6 +30,9 @@ class SecurityGroup(base.Resource):
 
     def delete(self):
         self.manager.delete(self)
+
+    def update(self):
+        self.manager.update(self)
 
 
 class SecurityGroupManager(base.ManagerWithFind):
@@ -43,6 +48,19 @@ class SecurityGroupManager(base.ManagerWithFind):
         """
         body = {"security_group": {"name": name, 'description': description}}
         return self._create('/os-security-groups', body, 'security_group')
+
+    def update(self, group, name, description):
+        """
+        Update a security group
+
+        :param group: The security group to delete (group or ID)
+        :param name: name for the security group to update
+        :param description: description for the security group to update
+        :rtype: the security group object
+        """
+        body = {"security_group": {"name": name, 'description': description}}
+        return self._update('/os-security-groups/%s' % base.getid(group),
+                            body, 'security_group')
 
     def delete(self, group):
         """
@@ -71,7 +89,7 @@ class SecurityGroupManager(base.ManagerWithFind):
         """
         search_opts = search_opts or {}
 
-        qparams = dict((k, v) for (k, v) in search_opts.iteritems() if v)
+        qparams = dict((k, v) for (k, v) in six.iteritems(search_opts) if v)
 
         query_string = '?%s' % urllib.urlencode(qparams) if qparams else ''
 

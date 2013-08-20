@@ -2,10 +2,12 @@
 """
 Flavor interface.
 """
+import urllib
 
 from novaclient import base
 from novaclient import exceptions
 from novaclient import utils
+from novaclient.openstack.common import uuidutils
 
 
 class Flavor(base.Resource):
@@ -76,16 +78,25 @@ class FlavorManager(base.ManagerWithFind):
     resource_class = Flavor
     is_alphanum_id_allowed = True
 
-    def list(self, detailed=True):
+    def list(self, detailed=True, is_public=True):
         """
         Get a list of all flavors.
 
         :rtype: list of :class:`Flavor`.
         """
-        if detailed is True:
-            return self._list("/flavors/detail", "flavors")
-        else:
-            return self._list("/flavors", "flavors")
+        qparams = {}
+        # is_public is ternary - None means give all flavors.
+        # By default Nova assumes True and gives admins public flavors
+        # and flavors from their own projects only.
+        if not is_public:
+            qparams['is_public'] = is_public
+        query_string = "?%s" % urllib.urlencode(qparams) if qparams else ""
+
+        detail = ""
+        if detailed:
+            detail = "/detail"
+
+        return self._list("/flavors%s%s" % (detail, query_string), "flavors")
 
     def get(self, flavor):
         """
@@ -105,7 +116,7 @@ class FlavorManager(base.ManagerWithFind):
         """
         self._delete("/flavors/%s" % base.getid(flavor))
 
-    def create(self, name, ram, vcpus, disk, flavorid=None,
+    def create(self, name, ram, vcpus, disk, flavorid="auto",
                ephemeral=0, swap=0, rxtx_factor=1.0, is_public=True):
         """
         Create (allocate) a  floating ip for a tenant
@@ -124,40 +135,42 @@ class FlavorManager(base.ManagerWithFind):
 
         try:
             ram = int(ram)
-        except:
+        except (TypeError, ValueError):
             raise exceptions.CommandError("Ram must be an integer.")
-
         try:
             vcpus = int(vcpus)
-        except:
+        except (TypeError, ValueError):
             raise exceptions.CommandError("VCPUs must be an integer.")
-
         try:
             disk = int(disk)
-        except:
+        except (TypeError, ValueError):
             raise exceptions.CommandError("Disk must be an integer.")
 
         if flavorid == "auto":
             flavorid = None
+        elif not uuidutils.is_uuid_like(flavorid):
+            try:
+                flavorid = int(flavorid)
+            except (TypeError, ValueError):
+                raise exceptions.CommandError("Flavor ID must be an integer "
+                                              "or a UUID or auto.")
 
         try:
             swap = int(swap)
-        except:
+        except (TypeError, ValueError):
             raise exceptions.CommandError("Swap must be an integer.")
-
         try:
             ephemeral = int(ephemeral)
-        except:
+        except (TypeError, ValueError):
             raise exceptions.CommandError("Ephemeral must be an integer.")
-
         try:
             rxtx_factor = float(rxtx_factor)
-        except:
+        except (TypeError, ValueError):
             raise exceptions.CommandError("rxtx_factor must be a float.")
 
         try:
             is_public = utils.bool_from_str(is_public)
-        except:
+        except Exception:
             raise exceptions.CommandError("is_public must be a boolean.")
 
         body = {
